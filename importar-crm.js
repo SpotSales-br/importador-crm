@@ -9,7 +9,7 @@ module.exports = async (req, res) => {
     const fd = new FormData();
     fd.append('file', new Blob([Buffer.from(file, 'base64')], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'planilha.xlsx');
     fd.append('dryRun', String(!!dryRun));
-    const r = await fetch(BASE + 'api/importar-crm', { method: 'POST', body: fd });
+    const r = await fetch(BASE + '/importar-crm', { method: 'POST', body: fd });
     const text = await r.text();
     res.status(r.status).setHeader('Content-Type', 'application/json').send(text);
   } catch (e) {
