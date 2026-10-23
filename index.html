@@ -67,13 +67,6 @@
   <h1>Importar planilha para o CRM</h1>
   <p class="sub">Envie a lista, o N8N valida pipeline, etapa e tags e cria as oportunidades.</p>
 
-  <details id="cfg">
-    <summary>Configuração do N8N</summary>
-    <div class="in">
-      <label for="url">URL base dos webhooks (ex.: https://seu-n8n.com/webhook)</label>
-      <input type="text" id="url" placeholder="https://seu-n8n.com/webhook" autocomplete="off">
-    </div>
-  </details>
 
   <section class="card">
     <div class="step"><span class="num">1</span><h2>Baixe a planilha de exemplo</h2></div>
@@ -127,9 +120,6 @@ const LS={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k
 let wbBlob=null, rowsCount=0, detalhes=[], filtro='todos';
 
 $('chips').innerHTML=COLS.map(c=>`<span class="chip">${c}</span>`).join('');
-$('url').value=LS.get('crm_n8n_url')||'';
-$('url').addEventListener('input',e=>LS.set('crm_n8n_url',e.target.value.trim()));
-if(!$('url').value) $('cfg').open=true;
 
 $('dl').onclick=()=>{
   const ws=XLSX.utils.aoa_to_sheet([COLS,['Maria Souza','5521999998888','Nome exato da pipeline','Nome exato da etapa','460','','Lista X','maria@email.com','','Nome exato da tag']]);
@@ -181,24 +171,20 @@ async function load(f){
   }catch(e){reset();showErr('Não consegui ler o arquivo: '+e.message)}
 }
 
-function base(){return $('url').value.trim().replace(/\/+$/,'')}
 
 $('send').onclick=async()=>{
   showErr('');
-  if(!base()){$('cfg').open=true;showErr('Informe a URL base dos webhooks do N8N.');return}
   $('send').disabled=true;
   const dry=$('dry').checked;
-  const fd=new FormData();
-  fd.append('file',wbBlob,'planilha.xlsx');
-  fd.append('dryRun',String(dry));
   try{
-    const r=await fetch(base()+'/importar-crm',{method:'POST',body:fd});
+    const b64=await new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>ok(String(fr.result).split(',')[1]);fr.onerror=no;fr.readAsDataURL(wbBlob)});
+    const r=await fetch('/api/importar-crm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:b64,dryRun:dry})});
     if(!r.ok) throw new Error('N8N respondeu '+r.status);
     const j=await r.json();
     if(!j.jobId) throw new Error('resposta sem jobId');
     acompanhar(j.jobId,dry);
   }catch(e){
-    showErr('Falha ao enviar: '+e.message+'. Confira a URL, se o workflow está ativo e se o N8N aceita requisições deste site (CORS).');
+    showErr('Falha ao enviar: '+e.message+'. Confira se o workflow do N8N está ativo.');
     $('send').disabled=false;
   }
 };
@@ -214,7 +200,7 @@ function acompanhar(jobId,dry){
   },1000);
   const poll=async()=>{
     try{
-      const r=await fetch(base()+'/importar-crm-status?jobId='+encodeURIComponent(jobId));
+      const r=await fetch('/api/status?jobId='+encodeURIComponent(jobId));
       const j=await r.json();
       if(j.status==='concluido'){clearInterval(tick);return mostrar(j)}
     }catch(e){}
