@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Importar planilha para o CRM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+    --bg:#f7f8fc; --card:#ffffff; --ink:#2b3044; --muted:#7b8198; --line:#e8ebf4;
+    --brand:#7c6cf0; --brand-dark:#6a59e0; --brand-soft:#f1efff; --ok:#1f9d5c; --ok-bg:#e9f8f0;
+    --err:#d6455d; --err-bg:#fdeef1; --warn:#b7791f; --warn-bg:#fff6e5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 Nunito,"Segoe UI",system-ui,sans-serif}
+  main{max-width:720px;margin:0 auto;padding:32px 16px 64px}
+  h1{font:800 28px/1.2 Nunito,"Segoe UI",system-ui,sans-serif;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:26px;margin-bottom:18px;box-shadow:0 4px 18px rgba(90,100,160,.07)}
+  .step{display:flex;gap:12px;align-items:center;margin-bottom:4px}
+  .num{flex:none;width:28px;height:28px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700}
+  h2{font:800 20px/1.2 Nunito,"Segoe UI",system-ui,sans-serif;margin:0}
+  .hint{color:var(--muted);margin:0 0 16px 38px}
+  .btn{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:10px 18px;border-radius:12px;font:700 14px Nunito,system-ui,sans-serif;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+  .btn:hover{border-color:var(--brand)}
+  .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn.primary:hover{background:var(--brand-dark)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font:600 12px Nunito,system-ui,sans-serif;background:var(--brand-soft);border:1px solid var(--line);border-radius:6px;padding:3px 9px}
+  .drop{border:2px dashed #cfc9fb;border-radius:16px;padding:36px 16px;text-align:center;background:var(--brand-soft);cursor:pointer;transition:.15s}
+  .drop.over{border-color:var(--brand);background:var(--card)}
+  .drop b{display:block;font:700 17px Nunito,system-ui,sans-serif}
+  .drop span{color:var(--muted);font-size:13px}
+  .file{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:14px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;font-size:14px}
+  .file small{color:var(--muted)}
+  .row{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-top:16px}
+  label.chk{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:14px}
+  input[type=text]{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:14px Nunito,system-ui,sans-serif}
+  details{margin-bottom:16px;color:var(--muted);font-size:14px}
+  details summary{cursor:pointer}
+  details .in{margin-top:8px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+  th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px}
+  .tw{overflow-x:auto}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin:12px 0}
+  .stat{border-radius:12px;padding:14px;border:1px solid var(--line)}
+  .stat b{display:block;font:700 28px Nunito,system-ui,sans-serif}
+  .stat.ok{background:var(--ok-bg);color:var(--ok)} .stat.err{background:var(--err-bg);color:var(--err)} .stat.sim{background:var(--warn-bg);color:var(--warn)}
+  .tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600}
+  .tag.criado{background:var(--ok-bg);color:var(--ok)} .tag.erro{background:var(--err-bg);color:var(--err)} .tag.simulado{background:var(--warn-bg);color:var(--warn)}
+  .bar{height:8px;border-radius:99px;background:var(--brand-soft);overflow:hidden;margin:14px 0 6px}
+  .bar i{display:block;height:100%;width:40%;background:var(--brand);border-radius:99px;animation:mv 1.4s ease-in-out infinite}
+  @keyframes mv{0%{margin-left:-40%}100%{margin-left:100%}}
+  .msg{padding:12px 14px;border-radius:10px;margin-top:12px;font-size:14px}
+  .msg.err{background:var(--err-bg);color:var(--err)} .msg.warn{background:var(--warn-bg);color:var(--warn)}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .filters button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:4px 12px;font-size:13px;cursor:pointer}
+  .filters button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <h1>Importar planilha para o CRM</h1>
+  <p class="sub">Envie a lista, o N8N valida pipeline, etapa e tags e cria as oportunidades.</p>
+
+  <details id="cfg">
+    <summary>Configuração do N8N</summary>
+    <div class="in">
+      <label for="url">URL base dos webhooks (ex.: https://seu-n8n.com/webhook)</label>
+      <input type="text" id="url" placeholder="https://seu-n8n.com/webhook" autocomplete="off">
+    </div>
+  </details>
+
+  <section class="card">
+    <div class="step"><span class="num">1</span><h2>Baixe a planilha de exemplo</h2></div>
+    <p class="hint">Use estas colunas para que o processamento funcione.</p>
+    <button class="btn" id="dl">⬇ Baixar planilha de exemplo</button>
+    <div class="chips" id="chips"></div>
+    <p class="hint" style="margin:14px 0 0">Colunas extras com o mesmo nome de um campo personalizado do CRM são preenchidas automaticamente. Várias tags na mesma célula: separe com <code>;</code></p>
+  </section>
+
+  <section class="card">
+    <div class="step"><span class="num">2</span><h2>Envie sua planilha preenchida</h2></div>
+    <p class="hint">Arraste o arquivo ou clique para selecionar.</p>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Selecionar planilha">
+      <b>Solte o arquivo aqui</b>
+      <span>ou <strong>clique para procurar</strong> · .xlsx ou .csv</span>
+    </div>
+    <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
+    <div id="fileinfo" hidden>
+      <div class="file"><div><strong id="fname"></strong><br><small id="fmeta"></small></div><button class="btn" id="clear">Trocar</button></div>
+      <div class="tw"><table id="prev"></table></div>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="send" disabled>Enviar planilha</button>
+      <label class="chk"><input type="checkbox" id="dry"> Apenas validar (não cria nada no CRM)</label>
+    </div>
+    <div id="err" class="msg err" hidden></div>
+  </section>
+
+  <section class="card" id="result" hidden>
+    <div class="step"><span class="num">3</span><h2 id="rtitle">Processando…</h2></div>
+    <div id="wait">
+      <div class="bar"><i></i></div>
+      <p class="hint" style="margin:0" id="wtxt"></p>
+    </div>
+    <div id="done" hidden>
+      <div class="stats" id="stats"></div>
+      <div id="notes"></div>
+      <div class="row" style="margin-top:8px">
+        <div class="filters" id="filters"></div>
+        <button class="btn" id="csv">⬇ Baixar relatório (CSV)</button>
+      </div>
+      <div class="tw"><table id="rt"></table></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const COLS=['nome','numero','pipeline','etapa do funil','atendente vinculado','empresa','origem','email','cargo','tag de negociação'];
+const $=id=>document.getElementById(id);
+const LS={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+let wbBlob=null, rowsCount=0, detalhes=[], filtro='todos';
+
+$('chips').innerHTML=COLS.map(c=>`<span class="chip">${c}</span>`).join('');
+$('url').value=LS.get('crm_n8n_url')||'';
+$('url').addEventListener('input',e=>LS.set('crm_n8n_url',e.target.value.trim()));
+if(!$('url').value) $('cfg').open=true;
+
+$('dl').onclick=()=>{
+  const ws=XLSX.utils.aoa_to_sheet([COLS,['Maria Souza','5521999998888','Nome exato da pipeline','Nome exato da etapa','460','','Lista X','maria@email.com','','Nome exato da tag']]);
+  ws['!cols']=COLS.map(()=>({wch:24}));
+  // força número como texto
+  ws['B2']={t:'s',v:'5521999998888'};
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Planilha');
+  XLSX.writeFile(wb,'modelo-importacao-crm.xlsx');
+};
+
+const drop=$('drop'), fi=$('file');
+drop.onclick=()=>fi.click();
+drop.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fi.click()}};
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',e=>{if(e.dataTransfer.files[0]) load(e.dataTransfer.files[0])});
+fi.onchange=()=>{if(fi.files[0]) load(fi.files[0])};
+$('clear').onclick=reset;
+
+function showErr(t){const e=$('err'); e.textContent=t||''; e.hidden=!t}
+function reset(){wbBlob=null;rowsCount=0;fi.value='';$('fileinfo').hidden=true;drop.hidden=false;$('send').disabled=true;showErr('')}
+
+async function load(f){
+  showErr('');
+  try{
+    const buf=await f.arrayBuffer();
+    // lê tudo como texto para não perder zeros/dígitos do telefone
+    const wb=XLSX.read(buf,{type:'array',raw:true,cellDates:false});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+    const head=(aoa[0]||[]).map(h=>String(h).trim());
+    const txt=v=>typeof v==='number'?(Number.isInteger(v)?v.toLocaleString('fullwide',{useGrouping:false}):String(v)):String(v??'').trim();
+    const data=aoa.slice(1).filter(r=>r.some(c=>txt(c)!==''));
+    if(!head.length||!data.length) throw new Error('A planilha está vazia.');
+    rowsCount=data.length;
+    // regrava como xlsx limpo (só colunas com cabeçalho) para o N8N
+    const keep=head.map((h,i)=>h?i:-1).filter(i=>i>=0);
+    const out=[keep.map(i=>head[i]),...data.map(r=>keep.map(i=>txt(r[i])))];
+    const ws2=XLSX.utils.aoa_to_sheet(out);
+    out.forEach((r,ri)=>r.forEach((v,ci)=>{ws2[XLSX.utils.encode_cell({r:ri,c:ci})]={t:'s',v}}));
+    const wb2=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2,ws2,'Planilha');
+    wbBlob=new Blob([XLSX.write(wb2,{type:'array',bookType:'xlsx'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    $('fname').textContent=f.name;
+    $('fmeta').textContent=`${rowsCount} linhas · ${keep.length} colunas`;
+    const t=$('prev'); t.innerHTML='';
+    const hr=t.insertRow(); out[0].forEach(h=>{const th=document.createElement('th');th.textContent=h;hr.appendChild(th)});
+    out.slice(1,6).forEach(r=>{const tr=t.insertRow(); r.forEach(v=>{tr.insertCell().textContent=v})});
+    $('fileinfo').hidden=false; drop.hidden=true; $('send').disabled=false;
+  }catch(e){reset();showErr('Não consegui ler o arquivo: '+e.message)}
+}
+
+function base(){return $('url').value.trim().replace(/\/+$/,'')}
+
+$('send').onclick=async()=>{
+  showErr('');
+  if(!base()){$('cfg').open=true;showErr('Informe a URL base dos webhooks do N8N.');return}
+  $('send').disabled=true;
+  const dry=$('dry').checked;
+  const fd=new FormData();
+  fd.append('file',wbBlob,'planilha.xlsx');
+  fd.append('dryRun',String(dry));
+  try{
+    const r=await fetch(base()+'/importar-crm',{method:'POST',body:fd});
+    if(!r.ok) throw new Error('N8N respondeu '+r.status);
+    const j=await r.json();
+    if(!j.jobId) throw new Error('resposta sem jobId');
+    acompanhar(j.jobId,dry);
+  }catch(e){
+    showErr('Falha ao enviar: '+e.message+'. Confira a URL, se o workflow está ativo e se o N8N aceita requisições deste site (CORS).');
+    $('send').disabled=false;
+  }
+};
+
+function acompanhar(jobId,dry){
+  $('result').hidden=false; $('done').hidden=true; $('wait').hidden=false;
+  $('rtitle').textContent=dry?'Validando…':'Importando…';
+  $('result').scrollIntoView({behavior:'smooth'});
+  const t0=Date.now();
+  const limite=Math.max(180,rowsCount*1.3+120)*1000; // ~0,8s por linha + folga
+  const tick=setInterval(()=>{
+    $('wtxt').textContent=`${rowsCount} linhas em processamento · ${Math.round((Date.now()-t0)/1000)}s. A API do CRM aceita 100 chamadas por minuto, então listas grandes levam alguns minutos. Pode deixar esta aba aberta.`;
+  },1000);
+  const poll=async()=>{
+    try{
+      const r=await fetch(base()+'/importar-crm-status?jobId='+encodeURIComponent(jobId));
+      const j=await r.json();
+      if(j.status==='concluido'){clearInterval(tick);return mostrar(j)}
+    }catch(e){}
+    if(Date.now()-t0>limite){
+      clearInterval(tick);
+      $('wait').hidden=true; $('rtitle').textContent='Sem resposta do N8N';
+      const m=document.createElement('div'); m.className='msg warn';
+      m.textContent=`O N8N não devolveu o relatório (job ${jobId}). Veja as execuções do workflow: pode ter dado erro na leitura do arquivo ou ainda estar rodando. Não reenvie antes de conferir, a API não evita duplicados.`;
+      $('result').appendChild(m); $('send').disabled=false; return;
+    }
+    setTimeout(poll,4000);
+  };
+  setTimeout(poll,4000);
+}
+
+function mostrar(j){
+  detalhes=j.detalhes||[]; filtro='todos';
+  $('wait').hidden=true; $('done').hidden=false;
+  $('rtitle').textContent=j.dryRun?'Validação concluída':'Importação concluída';
+  const s=$('stats');
+  s.innerHTML='';
+  const add=(cls,n,l)=>{const d=document.createElement('div');d.className='stat '+cls;const b=document.createElement('b');b.textContent=n;d.appendChild(b);d.appendChild(document.createTextNode(l));s.appendChild(d)};
+  add('',j.total,'linhas');
+  if(j.dryRun) add('sim',j.simulados,'prontas para criar'); else add('ok',j.criados,'criadas');
+  add('err',j.erros,'com erro');
+  const n=$('notes'); n.innerHTML='';
+  if(j.colunasIgnoradas&&j.colunasIgnoradas.length){const m=document.createElement('div');m.className='msg warn';m.textContent='Colunas ignoradas (não correspondem a nenhum campo do CRM): '+j.colunasIgnoradas.join(', ');n.appendChild(m)}
+  if(j.dryRun){const m=document.createElement('div');m.className='msg warn';m.textContent='Modo "apenas validar": nada foi criado no CRM. Desmarque a opção e envie de novo para importar.';n.appendChild(m)}
+  const f=$('filters'); f.innerHTML='';
+  ['todos','criado','simulado','erro'].forEach(k=>{
+    const c=k==='todos'?detalhes.length:detalhes.filter(d=>d.status===k).length;
+    if(k!=='todos'&&!c) return;
+    const b=document.createElement('button'); b.textContent=`${k==='todos'?'Todas':k==='criado'?'Criadas':k==='simulado'?'Prontas':'Erros'} (${c})`;
+    b.className=k===filtro?'on':''; b.onclick=()=>{filtro=k;[...f.children].forEach(x=>x.className='');b.className='on';tabela()}; f.appendChild(b);
+  });
+  if(j.erros>0&&!j.dryRun){filtro='erro';[...f.children].forEach(x=>x.className=/Erros/.test(x.textContent)?'on':'')}
+  tabela();
+  $('send').disabled=false;
+}
+
+function tabela(){
+  const t=$('rt'); t.innerHTML='';
+  const hr=t.insertRow(); ['Linha','Nome','Número','Status','Detalhe'].forEach(h=>{const th=document.createElement('th');th.textContent=h;hr.appendChild(th)});
+  detalhes.filter(d=>filtro==='todos'||d.status===filtro).slice(0,1000).forEach(d=>{
+    const tr=t.insertRow();
+    tr.insertCell().textContent=d.linha; tr.insertCell().textContent=d.nome; tr.insertCell().textContent=d.numero;
+    const s=tr.insertCell(); const sp=document.createElement('span'); sp.className='tag '+d.status; sp.textContent=d.status; s.appendChild(sp);
+    tr.insertCell().textContent=d.mensagem||d.id||'';
+  });
+}
+
+$('csv').onclick=()=>{
+  const esc=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const csv=['linha,nome,numero,status,id,ticketRef,contactId,mensagem',...detalhes.map(d=>[d.linha,d.nome,d.numero,d.status,d.id,d.ticketRef,d.contactId,d.mensagem].map(esc).join(','))].join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'})); a.download='relatorio-importacao.csv'; a.click();
+};
+</script>
+</body>
+</html>
