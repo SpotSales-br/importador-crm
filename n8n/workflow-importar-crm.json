@@ -1,0 +1,690 @@
+{
+  "name": "Importar planilha → CRM Spotsales",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "importar-crm",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "957f094a-f74b-4de0-b8ea-785ef4227845",
+      "name": "Webhook Upload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "85b14968-5de4-4e60-a0af-d3dc8060347b"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Cria o ID do job e lê as opções enviadas pelo site (multipart: file + dryRun)\nconst body = $('Webhook Upload').first().json.body || {};\nconst dryRun = String(body.dryRun || '').toLowerCase() === 'true';\nconst jobId = 'imp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);\nconst item = $input.first();\nreturn [{ json: { jobId, dryRun, recebidoEm: new Date().toISOString() }, binary: item.binary }];\n"
+      },
+      "id": "4714c50a-1a2b-4834-911f-59907221a3e0",
+      "name": "Criar job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"jobId\": $json.jobId, \"dryRun\": $json.dryRun } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "bca108f4-9259-4411-b3fc-dee2bcefaba8",
+      "name": "Responder jobId",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "file",
+        "options": {
+          "headerRow": true,
+          "readAsString": true
+        }
+      },
+      "id": "fb29237a-f710-412f-bdc9-2e9135d726eb",
+      "name": "Ler planilha",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Transforma as linhas da planilha em itens padronizados (cabeçalhos sem acento/maiúscula)\nconst norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim();\nconst out = [];\nlet n = 1; // linha 1 = cabeçalho\nfor (const it of $input.all()) {\n  n++;\n  const cells = {};\n  let temAlgo = false;\n  for (const [k, v] of Object.entries(it.json)) {\n    if (k === '' || k == null) continue;\n    let val = v;\n    if (val instanceof Date) val = val.toISOString().slice(0, 10);\n    if (typeof val === 'number' && Number.isFinite(val)) val = Number.isInteger(val) ? BigInt(val).toString() : String(val);\n    val = (val ?? '').toString().trim();\n    cells[norm(k)] = val;\n    if (val !== '') temAlgo = true;\n  }\n  if (!temAlgo) continue; // ignora linhas totalmente vazias\n  out.push({ json: { _linha: n, cells } });\n}\nif (!out.length) throw new Error('A planilha não tem nenhuma linha preenchida.');\nreturn out;\n"
+      },
+      "id": "2a937893-01cb-4cb4-a217-0ab9b8234c9c",
+      "name": "Normalizar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://apicrm.spotsales.ai/v1/pipelines",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "beb0fd91-c24d-4bed-97de-a79500a1a416",
+      "name": "GET Pipelines",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "CRM Spotsales - Bearer"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "https://apicrm.spotsales.ai/v1/tags",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "164dae17-f250-4ed2-a3cd-fd1b3ce70663",
+      "name": "GET Tags",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "CRM Spotsales - Bearer"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "https://apicrm.spotsales.ai/v1/custom-fields",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "e2d9bc91-3a3c-4d8c-aa4a-3d9392a4f0c8",
+      "name": "GET Campos personalizados",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "CRM Spotsales - Bearer"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Cruza cada linha com Pipelines/Etapas, Tags e Campos personalizados do CRM.\n// Linhas com problema NÃO vão para o CRM e aparecem no relatório.\nconst CFG = {\n  pipelinePadrao: '',   // usado quando a planilha não tem a coluna \"pipeline\" (nome exato)\n  etapaPadrao: '',      // usado quando a planilha não tem a coluna \"etapa do funil\"\n  userIdPadrao: '',     // usado quando a planilha não tem \"atendente vinculado\" (ID do usuário)\n  ddiPadrao: '55',      // acrescentado quando o número vier só com DDD+número\n  bloquearDuplicadasNoArquivo: true,\n};\nconst norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim();\nconst ALIAS = {\n  nome: ['nome', 'nome contato', 'nome do contato', 'contato', 'cliente'],\n  phone: ['numero', 'telefone', 'whatsapp', 'celular', 'phone', 'fone'],\n  pipeline: ['pipeline', 'funil'],\n  etapa: ['etapa do funil', 'etapa', 'coluna', 'estagio'],\n  user: ['atendente vinculado', 'atendente', 'userid', 'id atendente', 'id do atendente', 'responsavel'],\n  empresa: ['empresa'],\n  email: ['email', 'e-mail'],\n  tag: ['tag de negociacao', 'tag', 'tags', 'etiquetas', 'etiqueta'],\n  motivo: ['motivo de perda', 'motivo da perda'],\n};\nconst usados = new Set(Object.values(ALIAS).flat());\nconst pick = (cells, list) => { for (const a of list) if (cells[a] !== undefined && cells[a] !== '') return cells[a]; return ''; };\n\nconst dryRun = !!$('Criar job').first().json.dryRun;\nconst pipelines = $('GET Pipelines').all().map(i => i.json).filter(j => j && j.id);\nconst tags = $('GET Tags').all().map(i => i.json).filter(j => j && j.id);\nconst campos = $input.all().map(i => i.json).filter(j => j && j.id);\nconst camposAtivos = campos.filter(c => !c.archived);\n\nconst ignoradas = new Set();\nconst vistos = new Map();\nconst out = [];\n\nfor (const it of $('Normalizar').all()) {\n  const { _linha, cells } = it.json;\n  const erros = [];\n  const p = {};\n\n  // nome\n  p.contactName = pick(cells, ALIAS.nome);\n  if (!p.contactName) erros.push('nome vazio');\n\n  // telefone\n  let tel = pick(cells, ALIAS.phone).replace(/\\D/g, '');\n  if (tel.length === 10 || tel.length === 11) tel = CFG.ddiPadrao + tel;\n  if (tel.length < 12 || tel.length > 15) erros.push('número inválido: \"' + pick(cells, ALIAS.phone) + '\"');\n  p.phone = tel;\n\n  // pipeline / etapa\n  const pipeNome = pick(cells, ALIAS.pipeline) || CFG.pipelinePadrao;\n  const etapaNome = pick(cells, ALIAS.etapa) || CFG.etapaPadrao;\n  let pipe = null, col = null;\n  if (!pipeNome) erros.push('pipeline vazia');\n  else {\n    const m = pipelines.filter(x => norm(x.name) === norm(pipeNome));\n    if (m.length === 0) erros.push('pipeline \"' + pipeNome + '\" não existe (disponíveis: ' + pipelines.map(x => x.name).join(' | ') + ')');\n    else if (m.length > 1) erros.push('pipeline \"' + pipeNome + '\" está duplicada no CRM');\n    else pipe = m[0];\n  }\n  if (!etapaNome) erros.push('etapa vazia');\n  else if (pipe) {\n    const m = (pipe.columns || []).filter(x => norm(x.title) === norm(etapaNome));\n    if (m.length === 0) erros.push('etapa \"' + etapaNome + '\" não existe na pipeline \"' + pipe.name + '\" (disponíveis: ' + (pipe.columns || []).map(x => x.title).join(' | ') + ')');\n    else if (m.length > 1) erros.push('etapa \"' + etapaNome + '\" duplicada na pipeline');\n    else col = m[0];\n  }\n  if (pipe) p.pipelineId = pipe.id;\n  if (col) p.columnId = col.id;\n\n  // responsável / criador\n  let u = pick(cells, ALIAS.user) || CFG.userIdPadrao;\n  if (u !== '' && !isNaN(Number(u))) u = String(Math.trunc(Number(u)));\n  if (!u) erros.push('atendente vinculado vazio');\n  p.userId = u;\n\n  // opcionais\n  const email = pick(cells, ALIAS.email); if (email) p.email = email;\n  const empresa = pick(cells, ALIAS.empresa); if (empresa) p.contactCompany = empresa;\n\n  // tags (separe várias com ; ou |)\n  const tagNomes = pick(cells, ALIAS.tag).split(/[;|\\n]/).map(s => s.trim()).filter(Boolean);\n  const tagIds = [];\n  for (const t of tagNomes) {\n    const m = tags.filter(x => norm(x.label) === norm(t));\n    if (m.length === 0) erros.push('tag \"' + t + '\" não existe');\n    else if (m.length > 1) erros.push('tag \"' + t + '\" duplicada no CRM');\n    else if (!tagIds.includes(m[0].id)) tagIds.push(m[0].id);\n  }\n  if (tagIds.length) p.tagIds = tagIds;\n\n  // motivo de perda (opcional)\n  const motivo = pick(cells, ALIAS.motivo);\n  if (motivo) p.lossReasons = motivo.split(/[;|]/).map(s => s.trim()).filter(Boolean);\n\n  // campos personalizados: qualquer coluna extra cujo nome seja igual a um campo do CRM\n  const cf = [];\n  for (const [h, v] of Object.entries(cells)) {\n    if (usados.has(h) || v === '') continue;\n    const campo = camposAtivos.find(c => norm(c.name) === h);\n    if (!campo) { ignoradas.add(h); continue; }\n    const t = campo.type;\n    let val = v;\n    if (t === 'number') { val = Number(String(v).replace(',', '.')); if (Number.isNaN(val)) { erros.push('campo \"' + campo.name + '\": \"' + v + '\" não é número'); continue; } }\n    else if (t === 'boolean') {\n      if (/^(true|sim|s|1|yes|verdadeiro)$/i.test(norm(v))) val = true;\n      else if (/^(false|nao|n|0|no|falso)$/i.test(norm(v))) val = false;\n      else { erros.push('campo \"' + campo.name + '\": \"' + v + '\" não é sim/não'); continue; }\n    } else if (t === 'date') {\n      let m;\n      if ((m = String(v).match(/^(\\d{4})-(\\d{2})-(\\d{2})/))) val = m[1] + '-' + m[2] + '-' + m[3];\n      else if ((m = String(v).match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/))) val = m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');\n      else { erros.push('campo \"' + campo.name + '\": data \"' + v + '\" inválida (use AAAA-MM-DD ou DD/MM/AAAA)'); continue; }\n    } else if (t === 'single_choice') {\n      const o = (campo.options || []).find(x => norm(x) === norm(v));\n      if (!o) { erros.push('campo \"' + campo.name + '\": opção \"' + v + '\" não existe (' + (campo.options || []).join(' | ') + ')'); continue; }\n      val = o;\n    } else if (t === 'multiple_choice') {\n      const lista = String(v).split(/[;|]/).map(s => s.trim()).filter(Boolean);\n      const res = [];\n      for (const x of lista) {\n        const o = (campo.options || []).find(y => norm(y) === norm(x));\n        if (!o) { erros.push('campo \"' + campo.name + '\": opção \"' + x + '\" não existe'); } else res.push(o);\n      }\n      val = res;\n    }\n    cf.push({ fieldId: campo.id, value: val });\n  }\n  if (cf.length) p.customFields = cf;\n\n  // duplicadas dentro do próprio arquivo\n  if (CFG.bloquearDuplicadasNoArquivo && !erros.length) {\n    const chave = [p.phone, p.pipelineId, p.columnId, norm(p.contactName), (p.tagIds || []).join(','), JSON.stringify(p.customFields || [])].join('|');\n    if (vistos.has(chave)) erros.push('linha duplicada (igual à linha ' + vistos.get(chave) + ')');\n    else vistos.set(chave, _linha);\n  }\n\n  out.push({ json: { _linha, nome: p.contactName, numero: p.phone, _acao: erros.length ? 'erro' : (dryRun ? 'simulado' : 'criar'), _erro: erros.join('; '), p, _ignoradas: [...ignoradas] } });\n}\nreturn out;\n"
+      },
+      "id": "008b6e17-000e-4aee-9d6c-7ab9d1932fa5",
+      "name": "Validar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "19e973f9-600e-47ba-ae93-22558e98868a",
+              "leftValue": "={{ $json._acao }}",
+              "rightValue": "criar",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "aa6c1d4e-2155-486c-8ce4-fc2a3ed80e4c",
+      "name": "Criar no CRM?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "9ca76d70-b476-4f38-8c1a-6d238cefff5c",
+      "name": "COLOCAR AQUI - getTicket pelo número",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2220,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "aeb326d8-f3b8-4d2a-a302-dea205d61152",
+              "name": "ticketRef",
+              "value": "={{ $json.ticketId ?? $json.id ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "f96eaa54-9d91-460a-8b71-256546aa7d40",
+              "name": "contactId",
+              "value": "={{ $json.contactId ?? $json.contact?.id ?? \"\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "7f1ea939-aac0-4cba-809c-f67d7a41acef",
+      "name": "Dados da plataforma",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2440,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Junta os dados do ticket (node getTicket + Set) com a linha validada e monta o corpo do POST /opportunities\nconst ticket = $json;\nconst row = $('Validar').item.json;\nconst p = row.p;\nconst payload = {\n  ticketRef: String(ticket.ticketRef ?? '').trim(),\n  userId: p.userId,\n  contactName: p.contactName,\n  phone: p.phone,\n  pipelineId: p.pipelineId,\n  columnId: p.columnId,\n};\nfor (const k of ['email', 'contactCompany', 'tagIds', 'customFields', 'lossReasons']) if (p[k] !== undefined) payload[k] = p[k];\nreturn { json: { payload, _linha: row._linha, nome: row.nome, numero: row.numero, contactId: ticket.contactId ?? '' } };\n"
+      },
+      "id": "4b060275-a9f8-47e3-b227-2a211db3ae54",
+      "name": "Montar payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://apicrm.spotsales.ai/v1/opportunities",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 800
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "435ea570-3600-4fac-88a2-1b4738f0820b",
+      "name": "POST Oportunidade",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2880,
+        200
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "CRM Spotsales - Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Interpreta a resposta do CRM para cada linha\nconst ctx = $('Montar payload').item.json;\nconst code = Number($json.statusCode);\nlet body = $json.body;\nif (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) {} }\nlet status = 'erro', mensagem = '', id = '';\nif (code === 201) { status = 'criado'; id = (body && body.id) || ''; }\nelse {\n  const base = body && (body.message || body.error || body.code);\n  mensagem = 'HTTP ' + code + ': ' + (base ? (typeof base === 'string' ? base : JSON.stringify(base)) : JSON.stringify(body)).slice(0, 400);\n  if (!ctx.payload.ticketRef) mensagem = 'ticketRef vazio — o node getTicket não devolveu o ticket (' + mensagem + ')';\n  if (code === 429) mensagem += ' (limite de 100 req/min atingido — reenvie estas linhas)';\n}\nreturn { json: { linha: ctx._linha, nome: ctx.nome, numero: ctx.numero, status, id, contactId: ctx.contactId, ticketRef: ctx.payload.ticketRef, mensagem } };\n"
+      },
+      "id": "7eeec7e3-df57-4726-8407-45562acc5af2",
+      "name": "Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Linhas que não vão para o CRM: com erro de validação ou simuladas (modo \"apenas validar\")\nconst j = $json;\nreturn { json: { linha: j._linha, nome: j.nome, numero: j.numero, status: j._acao === 'simulado' ? 'simulado' : 'erro', id: '', contactId: '', ticketRef: '', mensagem: j._erro || '' } };\n"
+      },
+      "id": "a07bc2c4-7e4b-487d-baad-0277508f272a",
+      "name": "Sem criar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        420
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "9146e012-043a-4553-b7a9-8890f0aac8c9",
+      "name": "Juntar",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        3320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Consolida o resultado e guarda para o site consultar em /importar-crm-status\nconst job = $('Criar job').first().json;\nconst todas = $('Validar').all().map(i => i.json);\nconst res = $input.all().map(i => i.json);\nconst porLinha = new Map(res.map(r => [r.linha, r]));\nconst detalhes = [];\nfor (const r of todas) {\n  const x = porLinha.get(r._linha);\n  detalhes.push(x || { linha: r._linha, nome: r.nome, numero: r.numero, status: 'erro', id: '', contactId: '', ticketRef: '', mensagem: 'o node getTicket não devolveu nada para este número (ative \"Always Output Data\" nele)' });\n}\ndetalhes.sort((a, b) => a.linha - b.linha);\nconst cont = (s) => detalhes.filter(d => d.status === s).length;\nconst resumo = {\n  status: 'concluido', jobId: job.jobId, dryRun: job.dryRun,\n  total: detalhes.length, criados: cont('criado'), erros: cont('erro'), simulados: cont('simulado'),\n  colunasIgnoradas: todas.length ? (todas[0]._ignoradas || []) : [],\n  finalizadoEm: new Date().toISOString(),\n  detalhes: detalhes.slice(0, 5000),\n};\nconst sd = $getWorkflowStaticData('global');\nsd.jobs = sd.jobs || {};\nsd.jobs[job.jobId] = resumo;\nconst limite = Date.now() - 48 * 3600 * 1000;\nfor (const [k, v] of Object.entries(sd.jobs)) if (new Date(v.finalizadoEm).getTime() < limite) delete sd.jobs[k];\nreturn [{ json: { jobId: job.jobId, total: resumo.total, criados: resumo.criados, erros: resumo.erros, simulados: resumo.simulados } }];\n"
+      },
+      "id": "e357a724-1e66-4eea-b304-ebda97a3b7c4",
+      "name": "Finalizar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "importar-crm-status",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "52389c4d-6d4f-4957-a1e7-5c6bf873fcac",
+      "name": "Webhook Status",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        700
+      ],
+      "webhookId": "9fa33e52-3d42-44e3-9b02-abc642842c63"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const id = ($input.first().json.query || {}).jobId;\nconst sd = $getWorkflowStaticData('global');\nconst job = id && sd.jobs ? sd.jobs[id] : null;\nreturn [{ json: job || { status: 'processando', jobId: id || null } }];\n"
+      },
+      "id": "b81707fd-3b0e-4c1d-8e67-71789b103355",
+      "name": "Ler status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "fde715d3-d0bc-4057-b4ca-5479f07d44ba",
+      "name": "Responder status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Importador de planilha → CRM Spotsales\n**Antes de ativar**\n1. Crie a credencial *Header Auth* chamada **CRM Spotsales - Bearer**: Name = `Authorization`, Value = `Bearer SEU_TOKEN` (token em CRM → API). Selecione-a nos 4 nodes HTTP.\n2. **Ative o workflow** e use a URL de *produção* dos webhooks (o modo teste não guarda o resultado para o site).\n3. Cole a URL base no site (`https://SEU-N8N/webhook`).\n\n**Webhooks**\n- `POST /webhook/importar-crm` recebe o arquivo (campo `file`) e devolve o `jobId` na hora.\n- `GET /webhook/importar-crm-status?jobId=...` devolve o relatório quando terminar.\n\nO fluxo valida pipeline, etapa, tags e campos personalizados com os GETs do CRM antes de criar qualquer card. Linhas com problema não são enviadas e aparecem no relatório.",
+        "width": 760,
+        "height": 480,
+        "color": 4
+      },
+      "id": "e741f3d3-4a75-4854-8ae7-99d523fa9dfb",
+      "name": "Nota 1 - Como usar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## ➜ Seu node da plataforma entra aqui\nTroque o node cinza **COLOCAR AQUI - getTicket pelo número** pelo seu node (getTicket). Use como número: `{{ $json.numero }}` (DDI+DDD+número, só dígitos).\nLigue a saída dele no node **Dados da plataforma** e ajuste os campos **ticketRef** e **contactId** com os valores que o seu node devolve.\nAtive **Always Output Data** no seu node: assim números sem ticket aparecem no relatório em vez de sumirem.",
+        "width": 560,
+        "height": 270,
+        "color": 6
+      },
+      "id": "e1a18104-0ccc-4b64-887c-5e2e98638520",
+      "name": "Nota 2 - getTicket",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2160,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Limite da API\n100 requisições/min por token. O POST roda 1 por vez a cada 0,8 s (≈75/min). 173 linhas ≈ 2,5 min.\nA API não checa duplicidade: reenviar a mesma planilha cria cards repetidos.",
+        "width": 420,
+        "height": 200,
+        "color": 5
+      },
+      "id": "c9ee379e-a75c-451e-a16d-e93d072fad28",
+      "name": "Nota 3 - Limite",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2840,
+        -120
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Upload": {
+      "main": [
+        [
+          {
+            "node": "Criar job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar job": {
+      "main": [
+        [
+          {
+            "node": "Responder jobId",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder jobId": {
+      "main": [
+        [
+          {
+            "node": "Ler planilha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler planilha": {
+      "main": [
+        [
+          {
+            "node": "Normalizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar": {
+      "main": [
+        [
+          {
+            "node": "GET Pipelines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Pipelines": {
+      "main": [
+        [
+          {
+            "node": "GET Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Tags": {
+      "main": [
+        [
+          {
+            "node": "GET Campos personalizados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Campos personalizados": {
+      "main": [
+        [
+          {
+            "node": "Validar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar": {
+      "main": [
+        [
+          {
+            "node": "Criar no CRM?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COLOCAR AQUI - getTicket pelo número": {
+      "main": [
+        [
+          {
+            "node": "Dados da plataforma",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados da plataforma": {
+      "main": [
+        [
+          {
+            "node": "Montar payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar payload": {
+      "main": [
+        [
+          {
+            "node": "POST Oportunidade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Oportunidade": {
+      "main": [
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado": {
+      "main": [
+        [
+          {
+            "node": "Juntar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Juntar": {
+      "main": [
+        [
+          {
+            "node": "Finalizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Status": {
+      "main": [
+        [
+          {
+            "node": "Ler status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler status": {
+      "main": [
+        [
+          {
+            "node": "Responder status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar no CRM?": {
+      "main": [
+        [
+          {
+            "node": "COLOCAR AQUI - getTicket pelo número",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sem criar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sem criar": {
+      "main": [
+        [
+          {
+            "node": "Juntar",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
